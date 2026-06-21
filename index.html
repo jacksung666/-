@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人財務與資產分配動態系統 - 總預算控管版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-10 px-5">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-8">個人財務與資產分配動態系統</h1>
+        
+        <div id="alert-container" class="space-y-3 mb-6">
+            <div id="reminder-banner" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-xl shadow-sm flex justify-between items-center">
+                <div class="flex items-center">
+                    <span class="text-xl mr-2">⏰</span>
+                    <p class="font-medium">【定期定額提醒】今日是您的自訂扣款日！系統已自動扣除 <span id="reminder-details" class="font-bold"></span>。</p>
+                </div>
+                <button onclick="dismissReminder()" class="text-sm font-bold underline hover:text-yellow-900">知道了</button>
+            </div>
+            <div id="budget-alert-banner" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-xl shadow-sm flex justify-between items-center">
+                <div class="flex items-center">
+                    <span class="text-xl mr-2">🚨</span>
+                    <p id="budget-alert-text" class="font-medium">【預算警示】</p>
+                </div>
+                <button onclick="document.getElementById('budget-alert-banner').classList.add('hidden')" class="text-sm font-bold underline hover:text-red-900">關閉</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-green-500">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-gray-500 text-sm font-medium">目前總資產</h3>
+                    <button onclick="resetDataCanvas()" class="text-xs text-red-500 hover:text-red-700 underline font-bold bg-red-50 px-2 py-1 rounded">資料歸零</button>
+                </div>
+                <p id="total-asset-text" class="text-3xl font-bold text-green-600 mt-2">$0</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                <h3 class="text-gray-500 text-sm font-medium">本月總收入</h3>
+                <p id="total-income-text" class="text-3xl font-bold text-blue-600 mt-2">$0</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-red-500 relative">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-gray-500 text-sm font-medium">本月總支出</h3>
+                    <span id="board-budget-tag" class="text-xs font-bold px-1.5 py-0.5 rounded hidden"></span>
+                </div>
+                <p id="total-expense-text" class="text-3xl font-bold text-red-600 mt-2">$0</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+            
+            <div class="bg-white p-6 rounded-xl shadow-md md:col-span-1">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-700">🛒 新增日常交易</h2>
+                    <button onclick="toggleSettingPanel()" class="text-xs text-blue-500 hover:text-blue-700 underline font-bold bg-blue-50 px-2 py-1 rounded">⚙️ 系統功能設定</button>
+                </div>
+                <form id="finance-form" onsubmit="handleFormSubmit(event)">
+                    <div class="mb-3">
+                        <label class="block text-gray-600 text-sm mb-1">交易類型</label>
+                        <select id="type" class="w-full p-2 border rounded-lg text-sm focus:outline-none" onchange="updateCategories()">
+                            <option value="expense">支出</option>
+                            <option value="income">收入</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-gray-600 text-sm mb-1">消費類別</label>
+                        <select id="category" class="w-full p-2 border rounded-lg text-sm focus:outline-none"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-gray-600 text-sm mb-1">金額 (元)</label>
+                        <input type="number" id="amount" placeholder="金額" required class="w-full p-2 border rounded-lg text-sm focus:outline-none">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-gray-600 text-sm mb-1">記帳日期</label>
+                        <input type="date" id="date" required class="w-full p-2 border rounded-lg text-sm focus:outline-none">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-600 text-sm mb-1">備註說明</label>
+                        <input type="text" id="note" placeholder="例如：晚餐外食" class="w-full p-2 border rounded-lg text-sm focus:outline-none">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-sm transition duration-200">
+                        送出記帳
+                    </button>
+                </form>
+            </div>
+
+            <div id="setting-panel" class="hidden bg-white p-6 rounded-xl shadow-md md:col-span-1 border-2 border-yellow-400 overflow-y-auto max-h-[520px]">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 class="text-xl font-bold text-gray-700">⚙️ 系統功能設定</h2>
+                    <button onclick="toggleSettingPanel()" class="text-xs text-gray-400 hover:text-gray-600">✕ 關閉</button>
+                </div>
+                
+                <div class="mb-6 bg-orange-50 p-3 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-sm font-bold text-orange-800">📌 每月總預算上限</h3>
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="budget-toggle" class="sr-only peer" onchange="toggleBudgetFeature()">
+                            <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500 relative"></div>
+                            <span class="text-[11px] font-bold text-orange-800 ml-1.5">啟用</span>
+                        </label>
+                    </div>
+                    <div id="budget-input-area" class="flex gap-2 opacity-50 pointer-events-none transition-all duration-200">
+                        <input type="number" id="custom-budget-input" placeholder="預設 $30,000" class="w-full p-2 border rounded-lg text-xs focus:outline-none">
+                        <button onclick="saveCustomBudget()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-3 py-1 rounded-lg text-xs transition shrink-0">
+                            套用
+                        </button>
+                    </div>
+                    <p id="budget-summary-text" class="text-[10px] text-orange-600 mt-1.5 font-medium">功能未啟用</p>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-bold text-gray-600 mb-2">📅 設定定期定額扣款</h3>
+                    <form id="recurring-form" onsubmit="handleRecurringSubmit(event)">
+                        <div class="mb-2">
+                            <label class="block text-gray-500 text-[11px] mb-0.5">每月扣款日期 (1 ~ 31 號)</label>
+                            <input type="number" id="rec-day" min="1" max="31" placeholder="例如：21" required class="w-full p-1.5 border rounded-lg text-xs focus:outline-none">
+                        </div>
+                        <div class="mb-2">
+                            <label class="block text-gray-500 text-[11px] mb-0.5">扣款支出類別</label>
+                            <select id="rec-category" class="w-full p-1.5 border rounded-lg text-xs focus:outline-none">
+                                <option value="居住">居住</option>
+                                <option value="娛樂">娛樂</option>
+                                <option value="餐飲">餐飲</option>
+                                <option value="交通">交通</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="block text-gray-500 text-[11px] mb-0.5">每次扣款金額</label>
+                            <input type="number" id="rec-amount" placeholder="金額" required class="w-full p-1.5 border rounded-lg text-xs focus:outline-none">
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-gray-500 text-[11px] mb-0.5">扣款名稱/備註</label>
+                            <input type="text" id="rec-note" placeholder="例如：房屋租金" required class="w-full p-1.5 border rounded-lg text-xs focus:outline-none">
+                        </div>
+                        <button type="submit" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1.5 rounded-lg text-xs transition duration-200">
+                            儲存定期設定
+                        </button>
+                    </form>
+                    <div class="mt-3 p-2 bg-gray-50 rounded-lg text-[10px] text-gray-500">
+                        <p class="font-bold text-gray-600 mb-0.5">當前定期設定：</p>
+                        <span id="current-rec-setting">尚未進行任何設定</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="chart-panel" class="bg-white p-6 rounded-xl shadow-md md:col-span-2 flex flex-col items-center justify-center transition-all duration-300">
+                <h2 class="text-xl font-bold text-gray-700 mb-4 text-center">本月支出分配比例 (圖表報表)</h2>
+                <div class="w-64 h-64">
+                    <canvas id="expenseChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-xl font-bold text-gray-700 mb-4">📜 歷史動態記帳明細清單</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-600 text-sm leading-normal">
+                            <th class="py-3 px-6 font-bold">日期</th>
+                            <th class="py-3 px-6 font-bold">類型</th>
+                            <th class="py-3 px-6 font-bold">類別</th>
+                            <th class="py-3 px-6 font-bold">備註</th>
+                            <th class="py-3 px-6 font-bold text-right">金額</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-list" class="text-gray-600 text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const defaultData = {
+            totalAsset: 0,
+            totalIncome: 0,
+            totalExpense: 0,
+            categories: { '餐飲': 0, '娛樂': 0, '交通': 0, '居住': 0 },
+            history: [],
+            recurringConfig: null,
+            budgetEnabled: false,  // 💡 是否啟用總預算
+            budgetLimit: 30000     // 💡 預設每月總預算三萬元
+        };
+
+        let financialData;
+        try {
+            financialData = JSON.parse(localStorage.getItem('myFinanceDataTotalBudget')) || JSON.parse(JSON.stringify(defaultData));
+        } catch (e) {
+            financialData = JSON.parse(JSON.stringify(defaultData));
+        }
+
+        let myChart;
+
+        window.onload = function() {
+            document.getElementById('date').value = new Date().toISOString().split('T')[0];
+            updateCategories();
+            initChart();
+            renderUI();
+            renderHistoryTable();
+            renderRecurringSettingText();
+            
+            // 初始化開關狀態與預算值
+            document.getElementById('budget-toggle').checked = financialData.budgetEnabled;
+            document.getElementById('custom-budget-input').value = financialData.budgetLimit;
+            
+            toggleBudgetFeatureUI(financialData.budgetEnabled);
+            checkRegularInvestment();
+            checkBudgetWarning(); 
+        };
+
+        function toggleSettingPanel() {
+            const panel = document.getElementById('setting-panel');
+            const chartPanel = document.getElementById('chart-panel');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                chartPanel.classList.remove('md:col-span-2');
+                chartPanel.classList.add('md:col-span-1');
+            } else {
+                panel.classList.add('hidden');
+                chartPanel.classList.remove('md:col-span-1');
+                chartPanel.classList.add('md:col-span-2');
+            }
+        }
+
+        // 💡 處理預算功能開關切換
+        function toggleBudgetFeature() {
+            const isChecked = document.getElementById('budget-toggle').checked;
+            financialData.budgetEnabled = isChecked;
+            toggleBudgetFeatureUI(isChecked);
+            saveAndRefresh();
+        }
+
+        // 💡 依開關狀態改變 UI 的灰階鎖定與顯示
+        function toggleBudgetFeatureUI(enabled) {
+            const inputArea = document.getElementById('budget-input-area');
+            const boardTag = document.getElementById('board-budget-tag');
+            if (enabled) {
+                inputArea.classList.remove('opacity-50', 'pointer-events-none');
+                boardTag.classList.remove('hidden');
+            } else {
+                inputArea.classList.add('opacity-50', 'pointer-events-none');
+                boardTag.classList.add('hidden');
+                document.getElementById('budget-alert-banner').classList.add('hidden');
+            }
+        }
+
+        // 💡 儲存自訂的每月總預算
+        function saveCustomBudget() {
+            const inputVal = parseFloat(document.getElementById('custom-budget-input').value);
+            if (isNaN(inputVal) || inputVal <= 0) {
+                alert("請輸入有效的總預算金額！");
+                return;
+            }
+            financialData.budgetLimit = inputVal;
+            saveAndRefresh();
+            alert(`每月總預算已成功調整為 $${inputVal.toLocaleString()} 元！`);
+        }
+
+        // 💡 核心亮點：檢查「本月總支出」相較於「自訂總預算」的動態比例
+        function checkBudgetWarning() {
+            const summaryText = document.getElementById('budget-summary-text');
+            const boardTag = document.getElementById('board-budget-tag');
+            const banner = document.getElementById('budget-alert-banner');
+            const alertText = document.getElementById('budget-alert-text');
+
+            if (!financialData.budgetEnabled) {
+                summaryText.innerText = "功能未啟用";
+                boardTag.classList.add('hidden');
+                return;
+            }
+
+            const currentSpent = financialData.totalExpense;
+            const currentLimit = financialData.budgetLimit;
+            const ratio = currentSpent / currentLimit;
+            const percent = (ratio * 100).toFixed(0);
+
+            summaryText.innerText = `目前總支出進度：${percent}% ($${currentSpent.toLocaleString()} / $${currentLimit.toLocaleString()})`;
+            boardTag.innerText = `預算進度 ${percent}%`;
+
+            // 動態級聯變色 (看板小標籤 & 頂部警示橫幅)
+            if (ratio >= 1.0) {
+                boardTag.className = "text-xs font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600 animate-pulse";
+                alertText.innerText = `【總預算爆表警告】本月總支出已達 $${currentSpent.toLocaleString()} 元，衝破了 $${currentLimit.toLocaleString()} 元的自訂總預算上限！`;
+                banner.classList.remove('hidden');
+            } else if (ratio >= 0.8) {
+                boardTag.className = "text-xs font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600";
+                alertText.innerText = `【總預算警戒】本月總支出已達預算的 ${percent}%，花費接近上限，請注意控管消費！`;
+                banner.classList.remove('hidden');
+            } else {
+                boardTag.className = "text-xs font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-600";
+                banner.classList.add('hidden');
+            }
+        }
+
+        function updateCategories() {
+            const type = document.getElementById('type').value;
+            const categorySelect = document.getElementById('category');
+            categorySelect.innerHTML = '';
+            if (type === 'expense') {
+                ['餐飲', '娛樂', '交通', '居住'].forEach(cat => categorySelect.innerHTML += `<option value="${cat}">${cat}</option>`);
+            } else {
+                ['薪資', '獎金', '發票'].forEach(cat => categorySelect.innerHTML += `<option value="${cat}">${cat}</option>`);
+            }
+        }
+
+        function renderUI() {
+            document.getElementById('total-asset-text').innerText = `$${financialData.totalAsset.toLocaleString()}`;
+            document.getElementById('total-income-text').innerText = `$${financialData.totalIncome.toLocaleString()}`;
+            document.getElementById('total-expense-text').innerText = `$${financialData.totalExpense.toLocaleString()}`;
+        }
+
+        function renderRecurringSettingText() {
+            const textSpan = document.getElementById('current-rec-setting');
+            if (financialData.recurringConfig) {
+                const config = financialData.recurringConfig;
+                textSpan.innerHTML = `每月 <span class="text-blue-600 font-bold">${config.day} 號</span>，扣除 <span class="text-amber-600 font-bold">${config.category}</span> $${config.amount.toLocaleString()}元`;
+            } else {
+                textSpan.innerText = "尚未進行任何設定";
+            }
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('history-list');
+            tbody.innerHTML = '';
+            if (financialData.history.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-400">目前尚無任何記帳紀錄。</td></tr>`;
+                return;
+            }
+            const sortedHistory = [...financialData.history].sort((a, b) => new Date(b.date) - new Date(a.date));
+            sortedHistory.forEach(item => {
+                const typeBadge = item.type === 'income' ? `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">收入</span>` : `<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold">支出</span>`;
+                const amountColor = item.type === 'income' ? 'text-blue-600' : 'text-red-600';
+                tbody.innerHTML += `
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="py-3 px-6">${item.date}</td>
+                        <td class="py-3 px-6">${typeBadge}</td>
+                        <td class="py-3 px-6">${item.category}</td>
+                        <td class="py-3 px-6 text-gray-400">${item.note || '-'}</td>
+                        <td class="py-3 px-6 text-right font-bold ${amountColor}">${item.type === 'income' ? '+' : '-'}$${item.amount.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(financialData.categories),
+                    datasets: [{ data: Object.values(financialData.categories), backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function handleRecurringSubmit(event) {
+            event.preventDefault();
+            const day = parseInt(document.getElementById('rec-day').value);
+            const category = document.getElementById('rec-category').value;
+            const amount = parseFloat(document.getElementById('rec-amount').value);
+            const note = document.getElementById('rec-note').value;
+
+            financialData.recurringConfig = { day, category, amount, note };
+            saveAndRefresh();
+            renderRecurringSettingText();
+            checkRegularInvestment();
+            alert("定期定額設定已成功儲存！");
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            const type = document.getElementById('type').value;
+            const category = document.getElementById('category').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const date = document.getElementById('date').value;
+            const note = document.getElementById('note').value;
+
+            financialData.history.push({ type, category, amount, date, note });
+
+            if (type === 'expense') {
+                financialData.totalAsset -= amount;
+                financialData.totalExpense += amount;
+                if (financialData.categories[category] !== undefined) financialData.categories[category] += amount;
+            } else {
+                financialData.totalAsset += amount;
+                financialData.totalIncome += amount;
+            }
+
+            saveAndRefresh();
+            document.getElementById('amount').value = '';
+            document.getElementById('note').value = '';
+        }
+
+        function checkRegularInvestment() {
+            if (!financialData.recurringConfig) return;
+            const config = financialData.recurringConfig;
+            const today = new Date();
+            const currentDay = today.getDate();
+            const searchKeyword = `【自訂自動扣款】${config.note}`;
+            const alreadyDeducted = financialData.history.some(item => 
+                item.note === searchKeyword && item.date.startsWith(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2, '0')}`)
+            );
+
+            if (currentDay === config.day && !alreadyDeducted) {
+                const autoRecord = {
+                    type: 'expense',
+                    category: config.category,
+                    amount: config.amount,
+                    date: today.toISOString().split('T')[0],
+                    note: searchKeyword
+                };
+                financialData.history.push(autoRecord);
+                financialData.totalAsset -= config.amount;
+                financialData.totalExpense += config.amount;
+                financialData.categories[config.category] += config.amount;
+
+                document.getElementById('reminder-details').innerText = `${config.category} (${config.note}) $${config.amount.toLocaleString()} 元`;
+                document.getElementById('reminder-banner').classList.remove('hidden');
+                saveAndRefresh();
+            }
+        }
+
+        function dismissReminder() {
+            document.getElementById('reminder-banner').classList.add('hidden');
+        }
+
+        function saveAndRefresh() {
+            try { localStorage.setItem('myFinanceDataTotalBudget', JSON.stringify(financialData)); } catch (e) {}
+            renderUI();
+            renderHistoryTable();
+            checkBudgetWarning(); // 即時動態運算總預算比例
+            myChart.data.datasets[0].data = Object.values(financialData.categories);
+            myChart.update();
+        }
+
+        function resetDataCanvas() {
+            financialData = JSON.parse(JSON.stringify(defaultData));
+            document.getElementById('budget-toggle').checked = defaultData.budgetEnabled;
+            document.getElementById('custom-budget-input').value = defaultData.budgetLimit;
+            toggleBudgetFeatureUI(defaultData.budgetEnabled);
+            saveAndRefresh();
+            renderRecurringSettingText();
+            dismissReminder();
+        }
+    </script>
+</body>
+</html>
